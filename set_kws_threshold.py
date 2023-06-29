@@ -15,7 +15,7 @@ from sphinxbase.sphinxbase import *
 
 # keyphrases found in kwlist
 WORDS = []
-# test case containing multiple occurances 
+# test case containing multiple occurances
 # of words to be used as training audio
 TEST_CASE = []
 # Threshold values
@@ -36,7 +36,7 @@ def preprocess_files(dic_path, kwlist_path):
     with open(dic_path) as _f:
         _content = _f.readlines()
     _content = [x.strip() for x in _content]
-    
+
     with open(kwlist_path) as _f:
         WORDS = _f.readlines()
     WORDS = [x.strip()[:x.strip().rfind(' ')] for x in WORDS]
@@ -188,7 +188,7 @@ def actual_tuning(dic_path, kwlist_path, _z):
         _previous_missed.extend(_missed)
         _previous_fa = []
         _previous_fa.extend(_fa)
-        
+
         _missed, _fa = process_threshold(kws_analysis(dic_path, kwlist_path))
 
         if _z == 1:
@@ -224,14 +224,14 @@ def kws_analysis(dic, kwlist):
     modeldir = "/usr/local/share/pocketsphinx/model/"
 
     # Create a decoder with certain model
-    config = Decoder.default_config()
-    config.set_string('-hmm', os.path.join(modeldir, 'en-us/en-us'))
-    config.set_string('-dict', dic)
-    config.set_string('-kws', kwlist)
-    config.set_string('-dither', "no")
-    config.set_string('-logfn', '/dev/null')
-    config.set_string('-featparams', os.path.join(os.path.join(modeldir, 
-                                                               'en-us/en-us'), "feat.params"))
+    config = Config(
+        hmm=os.path.join(modeldir, 'en-us/en-us'),
+        dict=dic,
+        kws=kwlist,
+        dither="no",
+        featparams=os.path.join(os.path.join(modeldir, 'en-us/en-us'), "feat.params"),
+        logfn='/dev/null'
+    )
 
     stream = open(OUTPUT_FILENAME, "rb")
 
@@ -291,7 +291,7 @@ def process_threshold(analysis_result):
             missed[position_original][1] += 1
             print ('Missed ', val)
     return missed, false_alarms
-    
+
 if __name__ == '__main__':
     DIC_FILE = "/home/pankaj/catkin_ws/src/pocketsphinx/demo/voice_cmd.dic"
     KWLIST_FILE = "/home/pankaj/catkin_ws/src/pocketsphinx/demo/automated.kwlist"
