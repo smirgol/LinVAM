@@ -1,50 +1,59 @@
-import keyboard
-from pynput.mouse import Button, Controller
-import time
-import threading
-import os, pyaudio
-import shutil
+import os
 import re
-from pocketsphinx import *
-from soundfiles import SoundFiles
+import shutil
+import threading
+import time
+
+import keyboard
+from lib.voice_modules.vosk_module import ModuleVosk
+from pynput.mouse import Button, Controller
+
+
+class Config:
+    def __init__(self):
+        self.voice_module = None  # Default value
 
 
 class ProfileExecutor(threading.Thread):
     mouse = Controller()
 
-    def __init__(self, p_profile = None, p_parent = None):
-        # threading.Thread.__init__(self)
+    def __init__(self, p_profile=None, p_parent=None):
+        super().__init__()
 
-        # does nothing?
         self.setProfile(p_profile)
         self.m_stop = False
         self.m_listening = False
         self.m_cmdThreads = {}
 
-        self.m_config = Config(
-            hmm=os.path.join('model', 'en-us/en-us'),
-            dict=os.path.join('model', 'en-us/cmudict-en-us.dict'),
-            kws='command.list',
-            logfn='/dev/null'
-        )
+        self.m_config = Config()
+        self.m_config.voice_module = ModuleVosk()
+        self.m_config.voice_module.setup()
 
-        self.m_pyaudio = pyaudio.PyAudio()
+        #
+        #self.m_config = Config(
+        #    hmm=os.path.join('model', 'en-us/en-us'),
+        #    dict=os.path.join('model', 'en-us/cmudict-en-us.dict'),
+        #    kws='command.list',
+        #    logfn='/dev/null'
+        #)
 
-        try:
-            self.m_stream = self.m_pyaudio.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True)
-        except:
-            samplerate = int(self.m_pyaudio.get_device_info_by_index(0).get('defaultSampleRate'))
-            self.m_stream = self.m_pyaudio.open(format=pyaudio.paInt16, channels=1, rate=samplerate, input=True)
+        # self.m_config = Config()
+        # self.m_config.set_string('-hmm', os.path.join('model', 'en-us/en-us'))
+        # self.m_config.set_string('-dict', os.path.join('model', 'en-us/cmudict-en-us.dict'))
+        # self.m_config.set_string('-kws', 'command.list')
+        # self.m_config.set_string('-logfn', '/dev/null')
+
+        # self.m_pyaudio = pyaudio.PyAudio()
+        # self.m_stream = self.m_pyaudio.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True)
 
         # Process audio chunk by chunk. On keyword detected perform action and restart search
-        self.m_decoder = Decoder(self.m_config)
+        # self.m_decoder = Decoder(self.m_config)
 
         self.m_thread = False
 
         self.p_parent = p_parent
-        if not self.p_parent == None:
+        if self.p_parent is not None:
             self.m_sound = self.p_parent.m_sound
-
 
     def getSettingsPath(self, setting):
         home = os.path.expanduser("~") + '/.linvam/'
@@ -63,76 +72,94 @@ class ProfileExecutor(threading.Thread):
         #print ("writing command list")
         w_commandWordFile = open(self.getSettingsPath('command.list'), 'w')
         w_commands = self.m_profile['commands']
+        i = 0
         for w_command in w_commands:
-            parts = w_command['name'].split(',')
-            for part in parts:
-                w_commandWordFile.write(part.lower() + ' /1e-%d/' % w_command['threshold'] + '\n')
+            if i != 0:
+                w_commandWordFile.write('\n')
+            w_commandWordFile.write(w_command['name'].lower() + ' /1e-%d/' % w_command['threshold'])
+            i = i + 1
         w_commandWordFile.close()
-        self.m_config.set_string('-kws', self.getSettingsPath('command.list'))
+
+        # @todo: migrate
+        # self.m_config.set_string('-kws', self.getSettingsPath('command.list'))
+
         # load new command list into decoder and restart it
         if self.m_listening == True:
             self.stop()
             self.m_stream.start_stream()
             # a self.m_decoder.reinit(self.config) will segfault?
-            self.m_decoder = Decoder(self.m_config)
+            # @todo: migrate
+            #self.m_decoder = Decoder(self.m_config)
             self.m_stop = False
             self.m_thread = threading.Thread(target=self.doListen, args=())
             self.m_thread.start()
         else:
-            self.m_decoder.reinit(self.m_config)
+            # @todo: migrate
+            # self.m_decoder.reinit(self.m_config)
+            pass
 
     def setEnableListening(self, p_enable):
-        if self.m_listening == False and p_enable == True:
-            self.m_stream.start_stream()
+        if self.m_listening is False and p_enable is True:
+            self.m_config.voice_module.start_listening()
+            #self.m_stream.start_stream()
             self.m_listening = p_enable
             self.m_stop = False
             self.m_thread = threading.Thread(target=self.doListen, args=())
             self.m_thread.start()
-        elif self.m_listening == True and p_enable == False:
+        elif self.m_listening is True and p_enable is False:
             self.stop()
 
     def doListen(self):
-        print("Detection started")
-        self.m_listening = True
-        self.m_decoder.start_utt()
-        while self.m_stop != True:
-            buf = self.m_stream.read(1024)
+        while self.m_stop is False:
+            recognized_text = self.m_config.voice_module.loop()
+            if recognized_text is not None:
+                print(recognized_text)
+                self.doCommand(recognized_text)
+            else:
+                print("No data")
 
-            self.m_decoder.process_raw(buf, False, False)
+        # print("Detection started")
+        # self.m_listening = True
+        # self.m_decoder.start_utt()
+        # while self.m_stop is False:
+        #     buf = self.m_stream.read(1024)
+        #
+        #     self.m_decoder.process_raw(buf, False, False)
+        #
+        #     if self.m_decoder.hyp() != None:
+        #         #print([(seg.word, seg.prob, seg.start_frame, seg.end_frame) for seg in self.m_decoder.seg()])
+        #         #print("Detected keyword, restarting search")
+        #
+        #         # hack :)
+        #         for seg in self.m_decoder.seg():
+        #             print("Detected: ", seg.word)
+        #             break
+        #
+        #         #
+        #         # Here you run the code you want based on keyword
+        #         #
+        #         for w_seg in self.m_decoder.seg():
+        #             self.doCommand(w_seg.word.rstrip())
+        #
+        #         self.m_decoder.end_utt()
+        #         self.m_decoder.start_utt()
 
-            if self.m_decoder.hyp() != None:
-                #print([(seg.word, seg.prob, seg.start_frame, seg.end_frame) for seg in self.m_decoder.seg()])
-                #print("Detected keyword, restarting search")
-
-                # hack :)
-                for seg in self.m_decoder.seg():
-                    print("Detected: ",seg.word)
-                    break
-
-                #
-                # Here you run the code you want based on keyword
-                #
-                for w_seg in self.m_decoder.seg():
-                    self.doCommand(w_seg.word.rstrip())
-
-                self.m_decoder.end_utt()
-                self.m_decoder.start_utt()
-
-   # def run(self):
+    # def run(self):
 
     def stop(self):
         if self.m_listening == True:
             self.m_stop = True
             self.m_listening = False
-            self.m_decoder.end_utt()
+            #self.m_decoder.end_utt()
             self.m_thread.join()
-            self.m_stream.stop_stream()
+            #self.m_stream.stop_stream()
+            self.m_config.voice_module.stop_listening()
 
     def shutdown(self):
         self.stop()
-        self.m_stream.close()
-        self.m_pyaudio.terminate()
-
+        # @todo: migrate
+        ##self.m_stream.close()
+        ##self.m_pyaudio.terminate()
 
     def doAction(self, p_action):
         # {'name': 'key action', 'key': 'left', 'type': 0}
@@ -195,6 +222,7 @@ class ProfileExecutor(threading.Thread):
             self.m_actions = p_actions
             self.m_repeat = p_repeat
             self.m_stop = False
+
         def run(self):
             w_repeat = self.m_repeat
             while self.m_stop != True:
@@ -209,32 +237,30 @@ class ProfileExecutor(threading.Thread):
             threading.Thread.join(self)
 
     def doCommand(self, p_cmdName):
-        if self.m_profile == None:
+        if self.m_profile is None:
             return
 
         w_commands = self.m_profile['commands']
         flag = False
+        w_command = {}
         for w_command in w_commands:
-            parts = w_command['name'].split(',')
-            for part in parts:
-                if part.lower() == p_cmdName:
-                    flag = True
-                    break
-            if flag == True:
+            if w_command['name'].lower() == p_cmdName:
+                flag = True
                 break
 
-        if flag == False:
+        if not flag:
             return
 
         w_actions = w_command['actions']
         w_async = w_command['async']
 
-        if w_async == False:
+        if w_async is False:
             w_repeat = w_command['repeat']
             if w_repeat < 1:
                 w_repeat = 1
             while True:
                 for w_action in w_command['actions']:
+                    print("exec command ", w_action)
                     self.doAction(w_action)
                 w_repeat = w_repeat - 1
                 if w_repeat == 0:
@@ -252,7 +278,6 @@ class ProfileExecutor(threading.Thread):
     def playSound(self, p_cmdName):
         sound_file = './voicepacks/' + p_cmdName['pack'] + '/' + p_cmdName['cat'] + '/' + p_cmdName['file']
         self.m_sound.play(sound_file)
-
 
     def pressKey(self, w_key, w_type):
         if self.p_parent.m_config['noroot'] == 1:
@@ -292,7 +317,7 @@ class ProfileExecutor(threading.Thread):
                 window_cmd = " windowactivate --sync " + str(self.p_parent.m_config['xdowindowid'])
 
             if w_type == 1:
-                os.system('xdotool ' + window_cmd + ' keydown ' + str(w_key) )
+                os.system('xdotool ' + window_cmd + ' keydown ' + str(w_key))
                 print("pressed key: ", w_key)
             elif w_type == 0:
                 os.system('xdotool' + window_cmd + ' keyup ' + str(w_key))

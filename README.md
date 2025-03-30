@@ -79,3 +79,11 @@ If you own a HCS voicepack, copy the whole voicepack folder (like 'hcspack', 'hc
 ### Improve voice recognition accuracy
 Please see this resource on how to train the acoustic model of pocketsphinx to match your voice:
 https://cmusphinx.github.io/wiki/tutorialadapt/
+
+
+### Troubleshooting
+Q: pyaudio cannot be installed, it exits with "ERROR: Failed building wheel for pyaudio"
+A: Try to install `sudo apt install portaudio19-dev`
+
+Q: When starting the app, I get a `ModuleNotFoundError: No module named 'Xlib'`
+A: Try to install `sudo apt install python3-xlib`
