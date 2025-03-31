@@ -4,20 +4,21 @@ Linux Voice Activated Macro
 ## Status
 This project is currently a work-in-progress and is minimally functional only for english.
 
-Utilising Pocketsphinx, a lightweight voice to text engine you can specify voice commands for the tool to recognise and actions to perform.
+Utilising Vosk, a lightweight voice to text engine you can specify voice commands for the tool to recognise and actions to perform.
 
 Known bugs and planned additions
 - To save and use changes click Ok on the main GUI then reload.
 - Remember last loaded profile and load on start
-- Log window showing spoken words the V2T recognises with ability to right click and assign voice command and actions to current profile
+- Log window showing spoken words the V2T recognises with ability to right-click and assign voice command and actions to current profile
 - Support for joysticks and gaming devices
 
 ## Requirements
 - python3
 - PyQt5
 - python3-xlib
-- pyaudio
-- pocketsphinx
+- sounddevice
+- six
+- vosk
 - swig3.0
 
 ## Optional requirements
@@ -26,11 +27,9 @@ Known bugs and planned additions
 - HCS voicepacks
 
 ## Install
-- $ pip3 install PyQt5
-- $ pip3 install python3-xlib
-- $ pip3 install pyaudio
-- $ pip3 install pocketsphinx
-- $ sudo apt-get install swig3.0
+- $ python3 -m venv venv
+- $ source venv/bin/activate
+- $ pip install -r requirements.txt
 - $ (optional) sudo apt install xdotool
 - $ (optional) sudo apt install ffmpeg
 - $ sudo ln -s /usr/bin/swig3.0 /usr/bin/swig
@@ -39,12 +38,20 @@ Known bugs and planned additions
 ## Usage
 This script must be run with root privilege because it must hook and simulate input devices such as keyboard, mouse etc.
 - $ cd LinVAM
+- activate virtual python environment:
+  - $ source venv/bin/activate
 - $ xhost +
 - $ sudo ./main.py
+- when done: 
+  - $ deactivate
 
 As an alternative, if you use the X window manager and have xdotool installed, you can run the script like this:
 - $ cd LinVAM
-- $ ./main.py -noroot
+- activate virtual python environment:
+  - $ source venv/bin/activate
+- $ python ./main.py -noroot
+- when done: 
+  - $ deactivate
 
 ### Profiles
 Multiple profiles are supported.  To create a new profile for a specific task/game click new and the main profile editor window will be displayed

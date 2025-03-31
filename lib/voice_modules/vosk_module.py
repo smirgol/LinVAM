@@ -1,25 +1,31 @@
+import json
+import os
+import queue
 from abc import ABC
 from typing import Optional
 
-from lib.voice_module import VoiceModule
-import queue
 import sounddevice as sd
-from vosk import Model, KaldiRecognizer
-import json
+from vosk import Model, KaldiRecognizer, SetLogLevel
+
+from lib.voice_module import VoiceModule, VoiceModuleConfig
 
 
 class ModuleVosk(VoiceModule, ABC):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, config: VoiceModuleConfig):
+        super().__init__(config)
+        self.config = config
         self.buffer = None
         self.command_list = None
         self.stream = None
         self.queue = None
         self.recognizer = None
 
+        # configure logging of VOSK
+        SetLogLevel(-1)
+
     def setup(self) -> bool:
         # Load Vosk model (download from https://alphacephei.com/vosk/models)
-        model = Model("model/vosk-model-small-en-us-0.15")
+        model = Model(self.config.model)
 
         self.command_list = self._load_command_list()
 
@@ -33,11 +39,18 @@ class ModuleVosk(VoiceModule, ABC):
 
         # Start the microphone stream once
         self.stream = sd.RawInputStream(
-            samplerate=16000, blocksize=8000, dtype='int16',
-            channels=1, callback=self._callback
+            samplerate=self.config.sampling_rate, blocksize=8000, dtype='int16',
+            channels=self.config.channels, callback=self._callback
         )
 
         return True
+
+    def set_command_list_file(self, filename: str) -> None:
+        self.config.command_file = filename
+        self.command_list = self._load_command_list()
+        # vosk requires restart, as I found no way to update command list on the fly
+
+    #   self.restart()
 
     def loop(self) -> Optional[str]:
         data = self.queue.get()
@@ -66,22 +79,24 @@ class ModuleVosk(VoiceModule, ABC):
         self.stream.start()  # Start the stream
         pass
 
-    def pause_listening(self) -> None:
-        pass
-
     def stop_listening(self) -> None:
         self.stream.stop()  # Start the stream
         pass
 
     def cleanup(self) -> None:
         self.stop_listening()
+        self.stream.close()
         pass
 
-    @staticmethod
-    def _load_command_list() -> list[str]:
+    def restart(self) -> None:
+        self.stop_listening()
+        self.cleanup()
+        self.setup()
+
+    def _load_command_list(self) -> list[str]:
         # Load commands and remove the threshold part
         commands = []
-        with open("command.list", "r") as f:
+        with open(self.config.command_file, "r") as f:
             for line in f:
                 command = line.split("/")[0].strip()  # Keep only the command before "/"
                 if command:  # Ignore empty lines

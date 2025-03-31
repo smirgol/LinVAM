@@ -1,0 +1,5 @@
+PyQt5
+python3-xlib
+sounddevice
+six
+vosk

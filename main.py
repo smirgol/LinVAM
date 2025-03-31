@@ -1,19 +1,19 @@
-# #!/usr/bin/python3
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from ui_mainwnd import Ui_MainWidget
-from profileeditwnd import ProfileEditWnd
 import json
-from profileexecutor import ProfileExecutor
-import sys
-import pickle
-import signal
 import os
-import shutil
-import subprocess
+import pickle
 import shlex
+import shutil
+import signal
+import subprocess
+import sys
+
+from PyQt5.QtWidgets import *
+
+from profileeditwnd import ProfileEditWnd
+from profileexecutor import ProfileExecutor
 from soundfiles import SoundFiles
+from ui_mainwnd import Ui_MainWidget
+
 
 class MainWnd(QWidget):
 	def __init__(self, p_parent = None):
@@ -304,15 +304,16 @@ class MainWnd(QWidget):
 		# try to help: if -noroot is supplied, but no xdowindowid, try to determine the id
 		# Elite Dangerous only
 		try:
-			args = shlex.split('xdotool search --name "\(CLIENT\)"')
+			args = shlex.split(r'xdotool search --name "\(CLIENT\)"')
 			window_id = str(subprocess.check_output(args))
 			window_id = window_id.replace('b\'', '')
 			window_id = window_id.replace('\\n\'','')
+			print("Found Elite Dangerous window id")
 		except subprocess.CalledProcessError:
 			window_id = None
 			pass
 
-		if not window_id == None:
+		if window_id is not None:
 			# check if it's really the Client we want
 			try:
 				window_name = subprocess.check_output(['xdotool', 'getwindowname', str(window_id)])

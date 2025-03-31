@@ -5,9 +5,9 @@ import threading
 import time
 
 import keyboard
+from lib.voice_module import VoiceModuleConfig
 from lib.voice_modules.vosk_module import ModuleVosk
 from pynput.mouse import Button, Controller
-
 
 class Config:
     def __init__(self):
@@ -20,34 +20,37 @@ class ProfileExecutor(threading.Thread):
     def __init__(self, p_profile=None, p_parent=None):
         super().__init__()
 
+        self.m_profile = None
         self.setProfile(p_profile)
         self.m_stop = False
         self.m_listening = False
         self.m_cmdThreads = {}
 
+        # Vosk
+        voice_config = VoiceModuleConfig(
+            sampling_rate=16000,
+            sample_format='int16',
+            channels=1,
+            model=os.path.join('model', 'vosk-model-small-en-us-0.15'),
+            dictionary=None,
+            command_file=self.getSettingsPath('command.list')
+        )
         self.m_config = Config()
-        self.m_config.voice_module = ModuleVosk()
+        self.m_config.voice_module = ModuleVosk(voice_config)
         self.m_config.voice_module.setup()
 
-        #
-        #self.m_config = Config(
-        #    hmm=os.path.join('model', 'en-us/en-us'),
-        #    dict=os.path.join('model', 'en-us/cmudict-en-us.dict'),
-        #    kws='command.list',
-        #    logfn='/dev/null'
-        #)
-
+        # Pocketsphinx (untested)
+        # voice_config = VoiceModuleConfig(
+        #     sampling_rate=16000,
+        #     sample_format=pyaudio.paInt16,
+        #     channels=1,
+        #     model=os.path.join('model', 'en-us/en-us'),
+        #     dictionary=os.path.join('model', 'en-us/cmudict-en-us.dict'),
+        #     command_file=self.getSettingsPath('command.list')
+        # )
         # self.m_config = Config()
-        # self.m_config.set_string('-hmm', os.path.join('model', 'en-us/en-us'))
-        # self.m_config.set_string('-dict', os.path.join('model', 'en-us/cmudict-en-us.dict'))
-        # self.m_config.set_string('-kws', 'command.list')
-        # self.m_config.set_string('-logfn', '/dev/null')
-
-        # self.m_pyaudio = pyaudio.PyAudio()
-        # self.m_stream = self.m_pyaudio.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True)
-
-        # Process audio chunk by chunk. On keyword detected perform action and restart search
-        # self.m_decoder = Decoder(self.m_config)
+        # self.m_config.voice_module = ModulePocketsphinx(voice_config)
+        # self.m_config.voice_module.setup()
 
         self.m_thread = False
 
@@ -55,7 +58,7 @@ class ProfileExecutor(threading.Thread):
         if self.p_parent is not None:
             self.m_sound = self.p_parent.m_sound
 
-    def getSettingsPath(self, setting):
+    def getSettingsPath(self, setting: str) -> str:
         home = os.path.expanduser("~") + '/.linvam/'
         if not os.path.exists(home):
             os.mkdir(home)
@@ -65,11 +68,11 @@ class ProfileExecutor(threading.Thread):
         return home + setting
 
     def setProfile(self, p_profile):
-        #print("setProfile")
         self.m_profile = p_profile
-        if self.m_profile == None:
+        if self.m_profile is None:
             return
-        #print ("writing command list")
+
+        # write command list text file
         w_commandWordFile = open(self.getSettingsPath('command.list'), 'w')
         w_commands = self.m_profile['commands']
         i = 0
@@ -80,28 +83,20 @@ class ProfileExecutor(threading.Thread):
             i = i + 1
         w_commandWordFile.close()
 
-        # @todo: migrate
-        # self.m_config.set_string('-kws', self.getSettingsPath('command.list'))
+        self.m_config.voice_module.set_command_list_file(self.getSettingsPath('command.list'))
 
-        # load new command list into decoder and restart it
-        if self.m_listening == True:
-            self.stop()
-            self.m_stream.start_stream()
-            # a self.m_decoder.reinit(self.config) will segfault?
-            # @todo: migrate
-            #self.m_decoder = Decoder(self.m_config)
-            self.m_stop = False
-            self.m_thread = threading.Thread(target=self.doListen, args=())
-            self.m_thread.start()
+        # load new command list into voice module and restart it
+        if self.m_listening is True:
+            self.setEnableListening(False)
+            self.m_config.voice_module.restart()
+            self.setEnableListening(True)
         else:
-            # @todo: migrate
-            # self.m_decoder.reinit(self.m_config)
+            self.m_config.voice_module.restart()
             pass
 
     def setEnableListening(self, p_enable):
         if self.m_listening is False and p_enable is True:
             self.m_config.voice_module.start_listening()
-            #self.m_stream.start_stream()
             self.m_listening = p_enable
             self.m_stop = False
             self.m_thread = threading.Thread(target=self.doListen, args=())
@@ -110,56 +105,24 @@ class ProfileExecutor(threading.Thread):
             self.stop()
 
     def doListen(self):
+        self.m_listening = True
+
         while self.m_stop is False:
             recognized_text = self.m_config.voice_module.loop()
             if recognized_text is not None:
                 print(recognized_text)
                 self.doCommand(recognized_text)
-            else:
-                print("No data")
-
-        # print("Detection started")
-        # self.m_listening = True
-        # self.m_decoder.start_utt()
-        # while self.m_stop is False:
-        #     buf = self.m_stream.read(1024)
-        #
-        #     self.m_decoder.process_raw(buf, False, False)
-        #
-        #     if self.m_decoder.hyp() != None:
-        #         #print([(seg.word, seg.prob, seg.start_frame, seg.end_frame) for seg in self.m_decoder.seg()])
-        #         #print("Detected keyword, restarting search")
-        #
-        #         # hack :)
-        #         for seg in self.m_decoder.seg():
-        #             print("Detected: ", seg.word)
-        #             break
-        #
-        #         #
-        #         # Here you run the code you want based on keyword
-        #         #
-        #         for w_seg in self.m_decoder.seg():
-        #             self.doCommand(w_seg.word.rstrip())
-        #
-        #         self.m_decoder.end_utt()
-        #         self.m_decoder.start_utt()
-
-    # def run(self):
 
     def stop(self):
         if self.m_listening == True:
+            self.m_config.voice_module.stop_listening()
             self.m_stop = True
             self.m_listening = False
-            #self.m_decoder.end_utt()
             self.m_thread.join()
-            #self.m_stream.stop_stream()
-            self.m_config.voice_module.stop_listening()
 
     def shutdown(self):
         self.stop()
-        # @todo: migrate
-        ##self.m_stream.close()
-        ##self.m_pyaudio.terminate()
+        self.m_config.voice_module.cleanup()
 
     def doAction(self, p_action):
         # {'name': 'key action', 'key': 'left', 'type': 0}
@@ -225,7 +188,7 @@ class ProfileExecutor(threading.Thread):
 
         def run(self):
             w_repeat = self.m_repeat
-            while self.m_stop != True:
+            while self.m_stop is False:
                 for w_action in self.m_actions:
                     self.ProfileExecutor.doAction(w_action)
                 w_repeat = w_repeat - 1
@@ -303,8 +266,8 @@ class ProfileExecutor(threading.Thread):
             w_key = re.sub('del$', 'Delete', w_key, flags=re.IGNORECASE)
             w_key = re.sub('home', 'Home', w_key, flags=re.IGNORECASE)
             w_key = re.sub('end', 'End', w_key, flags=re.IGNORECASE)
-            w_key = re.sub('Page\s?up', 'Prior', w_key, flags=re.IGNORECASE)
-            w_key = re.sub('Page\s?down', 'Next', w_key, flags=re.IGNORECASE)
+            w_key = re.sub(r'Page\s?up', 'Prior', w_key, flags=re.IGNORECASE)
+            w_key = re.sub(r'Page\s?down', 'Next', w_key, flags=re.IGNORECASE)
             w_key = re.sub('return', 'Return', w_key, flags=re.IGNORECASE)
             w_key = re.sub('enter', 'Return', w_key, flags=re.IGNORECASE)
             w_key = re.sub('backspace', 'BackSpace', w_key, flags=re.IGNORECASE)
@@ -313,7 +276,8 @@ class ProfileExecutor(threading.Thread):
             w_key = w_key.replace('delete', 'Delete')
 
             window_cmd = ""
-            if not self.p_parent.m_config['xdowindowid'] == None:
+            if not self.p_parent.m_config['xdowindowid'] is None:
+                print("Focus window", str(self.p_parent.m_config['xdowindowid']))
                 window_cmd = " windowactivate --sync " + str(self.p_parent.m_config['xdowindowid'])
 
             if w_type == 1:
