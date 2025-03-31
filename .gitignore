@@ -130,5 +130,11 @@ dmypy.json
 # Ignore voicepack files
 voicepacks/*
 
+# Ignore IDE files
+.idea/
+
+# ignore model files
+model/
+
 # End of https://www.gitignore.io/api/python
  
